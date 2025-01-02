@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import cross_val_score
 import os
+from sklearn.model_selection import validation_curve
+import warnings
+warnings.filterwarnings('ignore')
 
 # 创建figures目录（如果不存在）
 if not os.path.exists('figures'):
@@ -230,6 +233,95 @@ def plot_roc_curves(models, X_test, y_test):
     plt.savefig(os.path.join('figures', 'roc_curves.png'))
     plt.close()
 
+def feature_ablation_study(X, y, feature_names):
+    """特征重要性验证实验"""
+    print("\n=== 特征重要性验证实验 ===")
+    rf = RandomForestClassifier(n_estimators=100, random_state=42)
+    
+    # 获取特征重要性
+    rf.fit(X, y)
+    importances = rf.feature_importances_
+    indices = np.argsort(importances)[::-1]
+    
+    print("特征重要性排序:")
+    for f in range(X.shape[1]):
+        print("%d. %s (%f)" % (f + 1, feature_names[indices[f]], importances[indices[f]]))
+    
+    # 使用不同特征组合进行实验
+    feature_combinations = [
+        ([0, 1, 2, 3], "所有特征"),
+        ([2, 3], "仅花瓣特征"),
+        ([0, 1], "仅萼片特征"),
+    ]
+    
+    results = []
+    for features, name in feature_combinations:
+        X_subset = X[:, features]
+        scores = cross_val_score(rf, X_subset, y, cv=5)
+        results.append({
+            '特征组合': name,
+            '平均准确率': scores.mean(),
+            '标准差': scores.std() * 2
+        })
+    
+    print("\n不同特征组合的性能：")
+    for result in results:
+        print(f"{result['特征组合']}: {result['平均准确率']:.4f} (±{result['标准差']:.4f})")
+
+def model_complexity_analysis(X, y):
+    """模型复杂度分析"""
+    print("\n=== 模型复杂度分析 ===")
+    
+    # 神经网络结构实验
+    print("\n1. 神经网络结构实验:")
+    nn_structures = [
+        ((5,), "单层隐藏层(5)"),
+        ((10,), "单层隐藏层(10)"),
+        ((10, 5), "两层隐藏层(10,5)"),
+        ((15, 10), "两层隐藏层(15,10)")
+    ]
+    
+    for structure, name in nn_structures:
+        mlp = MLPClassifier(hidden_layer_sizes=structure, max_iter=2000, random_state=42)
+        scores = cross_val_score(mlp, X, y, cv=5)
+        print(f"{name}: {scores.mean():.4f} (±{scores.std() * 2:.4f})")
+    
+    # 随机森林规模实验
+    print("\n2. 随机森林规模实验:")
+    n_estimators_range = [10, 50, 100, 200]
+    for n_trees in n_estimators_range:
+        rf = RandomForestClassifier(n_estimators=n_trees, random_state=42)
+        scores = cross_val_score(rf, X, y, cv=5)
+        print(f"树的数量={n_trees}: {scores.mean():.4f} (±{scores.std() * 2:.4f})")
+    
+    # SVM核函数实验
+    print("\n3. SVM核函数实验:")
+    kernels = ['linear', 'rbf', 'poly']
+    for kernel in kernels:
+        svm = SVC(kernel=kernel, random_state=42)
+        scores = cross_val_score(svm, X, y, cv=5)
+        print(f"{kernel}核函数: {scores.mean():.4f} (±{scores.std() * 2:.4f})")
+
+def hyperparameter_sensitivity(X, y):
+    """超参数敏感性分析"""
+    print("\n=== 超参数敏感性分析 ===")
+    
+    # 神经网络学习率实验
+    print("\n1. 神经网络学习率实验:")
+    learning_rates = [0.001, 0.01, 0.1]
+    for lr in learning_rates:
+        mlp = MLPClassifier(learning_rate_init=lr, max_iter=2000, random_state=42)
+        scores = cross_val_score(mlp, X, y, cv=5)
+        print(f"学习率={lr}: {scores.mean():.4f} (±{scores.std() * 2:.4f})")
+    
+    # SVM正则化参数实验
+    print("\n2. SVM正则化参数实验:")
+    C_range = [0.1, 1.0, 10.0]
+    for C in C_range:
+        svm = SVC(C=C, random_state=42)
+        scores = cross_val_score(svm, X, y, cv=5)
+        print(f"C={C}: {scores.mean():.4f} (±{scores.std() * 2:.4f})")
+
 def main():
     # 加载数据
     X, y = load_data('iris.data')
@@ -313,6 +405,12 @@ def main():
     plt.tight_layout()
     plt.savefig(os.path.join('figures', 'model_comparison.png'), dpi=300, bbox_inches='tight')
     plt.close()
+    
+    # 添加消融实验
+    print("\n=== 开始消融实验 ===")
+    feature_ablation_study(X_train_scaled, y_train, feature_names)
+    model_complexity_analysis(X_train_scaled, y_train)
+    hyperparameter_sensitivity(X_train_scaled, y_train)
 
 if __name__ == "__main__":
     main() 
